@@ -2,12 +2,12 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import logging
 import requests
+import asyncio
 
-
-BOT_TOKEN = "6978271554:AAGfKzhFDyYhOZRCwYO206GriEjpKAPaUYQ"
+BOT_TOKEN = "<BOT_TOKEN>"
 FLASK_APP_URL = "http://localhost:7000"
-API_KEY = "your_api_key_here"  
-PASSWORD = "yourpassword"  
+API_KEY = "your_api_key_here"  # API key for authentication
+PASSWORD = "yourpassword"  # Your Password to Continue
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 # To save the authentication status of users
 authenticated_users = set()
+
+# Queue to handle user commands
+user_command_queue = asyncio.Queue()
 
 def lamp_keyboard():
     try:
@@ -61,6 +64,31 @@ async def lamps_name(lamp_name):
     except Exception as e:
         logger.error(f"Error toggling lamp {lamp_name}: {e}")
         return f"An error occurred: {e}"
+
+async def process_queue():
+    while True:
+        update, context = await user_command_queue.get()
+        query = update.callback_query
+        user_id = query.from_user.id
+
+        if user_id not in authenticated_users:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="لطفاً ابتدا احراز هویت کنید."
+            )
+            continue
+
+        lamp_name = query.data.split('_')[-1]
+        message = await lamps_name(f'lamp_{lamp_name}')
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=message,
+            reply_markup=lamp_keyboard()
+        )
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await user_command_queue.put((update, context))
+    await update.callback_query.answer(text="در صف انتظار هستید...")
 
 async def start_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
@@ -138,8 +166,23 @@ async def main():
     bot = ApplicationBuilder().token(BOT_TOKEN).build()
 
     bot.add_handler(CommandHandler('start', start_command_handler))
+    bot.add_handler(CallbackQueryHandler(button_callback))
     bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, password_handler))
     bot.add_handler(CommandHandler('turn_on_lamp', turn_on_lamp_handler))
     bot.add_handler(CommandHandler('turn_off_lamp', turn_off_lamp_handler))
-    bot.run_polling()
 
+    # Initialize the bot
+    await bot.initialize()
+
+    # Start processing the queue
+    asyncio.create_task(process_queue())
+
+    # Start the bot
+    await bot.start()
+
+    # Run the bot until it is stopped
+    await bot.updater.start_polling()
+    await asyncio.Event().wait()  # Instead of updater.idle()
+
+# Execute the main function
+asyncio.run(main())
