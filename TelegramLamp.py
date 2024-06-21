@@ -3,9 +3,12 @@ from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandle
 import logging
 import requests
 
-BOT_TOKEN = "<BOT_TOKEN>" #Your BOT_TOKEN  to use bot
+
+BOT_TOKEN = "6978271554:AAGfKzhFDyYhOZRCwYO206GriEjpKAPaUYQ"
 FLASK_APP_URL = "http://localhost:7000"
-PASSWORD = "yourpassword"  # Your Password to Continue
+API_KEY = "your_api_key_here"  
+PASSWORD = "yourpassword"  
+
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
@@ -13,16 +16,20 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # To save the authentication status of users
-password = set()
+authenticated_users = set()
 
-
-#This function show the status of Lamps
 def lamp_keyboard():
     try:
-        lamp_1_status = "❌" if not requests.get(f"{FLASK_APP_URL}/get_lamp_state/lamp_1").json().get('state', False) else "✅"
-        lamp_2_status = "❌" if not requests.get(f"{FLASK_APP_URL}/get_lamp_state/lamp_2").json().get('state', False) else "✅"
-        lamp_3_status = "❌" if not requests.get(f"{FLASK_APP_URL}/get_lamp_state/lamp_3").json().get('state', False) else "✅"
-        lamp_4_status = "❌" if not requests.get(f"{FLASK_APP_URL}/get_lamp_state/lamp_4").json().get('state', False) else "✅"
+        headers = {'api-key': API_KEY}
+        response_1 = requests.get(f"{FLASK_APP_URL}/get_lamp_state/lamp_1", headers=headers)
+        response_2 = requests.get(f"{FLASK_APP_URL}/get_lamp_state/lamp_2", headers=headers)
+        response_3 = requests.get(f"{FLASK_APP_URL}/get_lamp_state/lamp_3", headers=headers)
+        response_4 = requests.get(f"{FLASK_APP_URL}/get_lamp_state/lamp_4", headers=headers)
+        
+        lamp_1_status = "❌" if not response_1.json().get('state', False) else "✅"
+        lamp_2_status = "❌" if not response_2.json().get('state', False) else "✅"
+        lamp_3_status = "❌" if not response_3.json().get('state', False) else "✅"
+        lamp_4_status = "❌" if not response_4.json().get('state', False) else "✅"
     except Exception as e:
         logger.error(f"Error fetching lamp state: {e}")
         lamp_1_status = lamp_2_status = lamp_3_status = lamp_4_status = "❓"
@@ -35,46 +42,29 @@ def lamp_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-async def lamps(lamp_name):
+async def lamps_name(lamp_name):
     try:
-        current_state = requests.get(f"{FLASK_APP_URL}/get_lamp_state/{lamp_name}").json().get('state')
+        headers = {'api-key': API_KEY}
+        response = requests.get(f"{FLASK_APP_URL}/get_lamp_state/{lamp_name}", headers=headers)
+        logger.info(f"Received response from get_lamp_state: {response.json()}")
+        current_state = response.json().get('state')
         if current_state is None:
-            raise ValueError("Invalid lamp state received")
+            raise ValueError(f"Invalid lamp state received for {lamp_name}")
 
         if current_state:
-            response = requests.post(f"{FLASK_APP_URL}/turn_off_lamp/{lamp_name}")
+            response = requests.post(f"{FLASK_APP_URL}/turn_off_lamp/{lamp_name}", headers=headers)
         else:
-            response = requests.post(f"{FLASK_APP_URL}/turn_on_lamp/{lamp_name}")
+            response = requests.post(f"{FLASK_APP_URL}/turn_on_lamp/{lamp_name}", headers=headers)
 
-        return response.json().get('message', 'Error  ')
+        logger.info(f"Received response from toggling lamp: {response.json()}")
+        return response.json().get('message', 'Error toggling lamp')
     except Exception as e:
-        logger.error(f"Error   {lamp_name}: {e}")
+        logger.error(f"Error toggling lamp {lamp_name}: {e}")
         return f"An error occurred: {e}"
-
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-
-    # Cheking the authentication of users
-    if user_id not in password:
-        await context.bot.send_message(
-            chat_id=update.effective_chat.id,
-            text="لطفاً ابتدا احراز هویت کنید."
-        )
-        return
-
-    lamp_name = query.data.split('_')[-1]
-    message = await lamps(f'lamp_{lamp_name}')
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text=message,
-        reply_markup=lamp_keyboard()
-    )
 
 async def start_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
-    if user_id in password:
+    if user_id in authenticated_users:
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="شما قبلاً احراز هویت شده‌اید.",
@@ -88,7 +78,7 @@ async def start_command_handler(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def password_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
-    if user_id in password:
+    if user_id in authenticated_users:
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="شما قبلاً احراز هویت شده‌اید.",
@@ -98,7 +88,7 @@ async def password_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     password = update.message.text
     if password == PASSWORD:
-        password.add(user_id)
+        authenticated_users.add(user_id)
         await context.bot.send_message(
             chat_id=update.effective_chat.id,
             text="احراز هویت موفقیت‌آمیز بود!",
@@ -109,12 +99,47 @@ async def password_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=update.effective_chat.id,
             text="رمز عبور اشتباه است. لطفاً دوباره تلاش کنید."
         )
-# Handlers to start bot 
-if __name__ == "__main__":
+
+async def turn_on_lamp_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id in authenticated_users:
+        lamp_name = update.message.text.split()[-1]
+        message = await lamps_name(f'lamp_{lamp_name}')
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=message,
+            reply_markup=lamp_keyboard()
+        )
+    else:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="لطفاً ابتدا احراز هویت کنید."
+        )
+
+async def turn_off_lamp_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id in authenticated_users:
+        lamp_name = update.message.text.split()[-1]
+        message = await lamps_name(f'lamp_{lamp_name}')
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=message,
+            reply_markup=lamp_keyboard()
+        )
+    else:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="لطفاً ابتدا احراز هویت کنید."
+        )
+
+
+
+async def main():
     bot = ApplicationBuilder().token(BOT_TOKEN).build()
 
     bot.add_handler(CommandHandler('start', start_command_handler))
-    bot.add_handler(CallbackQueryHandler(button_callback))
     bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, password_handler))
-
+    bot.add_handler(CommandHandler('turn_on_lamp', turn_on_lamp_handler))
+    bot.add_handler(CommandHandler('turn_off_lamp', turn_off_lamp_handler))
     bot.run_polling()
+
