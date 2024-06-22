@@ -1,8 +1,8 @@
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import logging
 import requests
 import asyncio
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 BOT_TOKEN = "<BOT_TOKEN>"
 FLASK_APP_URL = "http://localhost:7000"
@@ -160,16 +160,40 @@ async def turn_off_lamp_handler(update: Update, context: ContextTypes.DEFAULT_TY
             text="لطفاً ابتدا احراز هویت کنید."
         )
 
-
+async def help_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    admin_username = "user_name"  # Admin username for sending message
+    help_message = (
+        "سلام, من یک ربات کنترل لامپ هستم. شما می‌توانید از دستورات زیر استفاده کنید:\n"
+        "/start - شروع و احراز هویت\n"
+        "/help - دریافت راهنما\n"
+        "/turn_on_lamp <lamp_number> - روشن کردن لامپ مشخص شده\n"
+        "/turn_off_lamp <lamp_number> - خاموش کردن لامپ مشخص شده\n"
+        "اگر سوال یا مشکلی دارید، لطفاً به ادمین پیام دهید: "
+        f"[@{admin_username}](tg://user?id={user_id})"
+    )
+    await context.bot.send_message(chat_id=update.effective_chat.id, text=help_message, parse_mode='Markdown')
+ 
+async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    if user_id not in authenticated_users:
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="لطفاً ابتدا دستور /start را اجرا کنید."
+        )
+    else:
+        await help_command_handler(update, context)
 
 async def main():
     bot = ApplicationBuilder().token(BOT_TOKEN).build()
 
     bot.add_handler(CommandHandler('start', start_command_handler))
+    bot.add_handler(CommandHandler('help', help_command_handler))
     bot.add_handler(CallbackQueryHandler(button_callback))
     bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, password_handler))
     bot.add_handler(CommandHandler('turn_on_lamp', turn_on_lamp_handler))
     bot.add_handler(CommandHandler('turn_off_lamp', turn_off_lamp_handler))
+    bot.add_handler(MessageHandler(filters.ALL, message_handler))
 
     # Initialize the bot
     await bot.initialize()
