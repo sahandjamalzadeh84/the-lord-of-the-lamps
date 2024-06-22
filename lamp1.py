@@ -4,6 +4,7 @@ app = Flask(__name__)
 
 API_KEY = "your_api_key_here"
 
+
 def require_api_key(f):
     def decorated_function(*args, **kwargs):
         if request.headers.get('api-key') == API_KEY:
@@ -13,12 +14,16 @@ def require_api_key(f):
     decorated_function.__name__ = f.__name__
     return decorated_function
 
+# intial states of the lamps
+
 lamp_states = {
     'lamp_1': False,
     'lamp_2': False,
     'lamp_3': False,
     'lamp_4': False,
 }
+
+# def get lamps 
 
 @app.route('/get_lamp_state/<lamp_name>', methods=['GET'])
 @require_api_key
@@ -28,6 +33,8 @@ def get_lamp_state(lamp_name):
     else:
         return jsonify({'message': 'Lamp not found'}), 404
 
+# def turn on lamps with post method
+
 @app.route('/turn_on_lamp/<lamp_name>', methods=['POST'])
 @require_api_key
 def turn_on_lamp(lamp_name):
@@ -36,6 +43,8 @@ def turn_on_lamp(lamp_name):
         return jsonify({'message': f'{lamp_name} turned on'})
     else:
         return jsonify({'message': 'Lamp not found'}), 404
+
+# def get turn off lamps with post method
 
 @app.route('/turn_off_lamp/<lamp_name>', methods=['POST'])
 @require_api_key
