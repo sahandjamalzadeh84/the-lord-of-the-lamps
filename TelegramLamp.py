@@ -4,10 +4,6 @@ import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-BOT_TOKEN = "<BOT_TOKEN>"
-FLASK_APP_URL = "http://localhost:7000"
-API_KEY = "your_api_key_here"  # API key for authentication
-PASSWORD = "yourpassword"  # Your Password to Continue
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
